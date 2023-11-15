@@ -58,7 +58,7 @@
 
 (def px--cell-spacing 2)
 
-(defn >cell [cell]
+(defn >cell [cell exec]
   (let [action (-> cell :action)]
     ($ :div {:class "cell"
              :style {:padding 4
@@ -67,10 +67,10 @@
                                          "rgba(0,0,0,0.2)")
                      ;; :border "1px solid #ddd"
                      :cursor (when action :pointer)}
-             :on-click action}
+             :on-click (when action #(exec action))}
        (-> cell :text))))
 
-(defn >row [row]
+(defn >row [row exec]
   ($ :div {:class "row"
            :style {:padding-left (when-let [indent (-> row :indent)]
                                    (str (-> indent (* 8)) "px"))}}
@@ -83,9 +83,9 @@
        ($ :div {:style {:display :flex
                         :gap (str px--cell-spacing "px")}}
           (for [cell cells]
-            (>cell cell))))))
+            (>cell cell exec))))))
 
-(defn >presentation [presentation]
+(defn >presentation [presentation exec]
   ($ :div {:class "presentation"
            :style {:padding "8px"
                    :font-family :monospace}}
@@ -94,7 +94,16 @@
                       :flex-direction :column
                       :gap (str px--cell-spacing "px")}}
         (for [row (-> presentation :rows)]
-          (>row row)))))
+          (>row row exec)))))
+
+(defn exec [f e-lock]
+  (-> e-lock .-style .-display (set! "block"))
+  (let [result (f)]
+    (if (instance? js/Promise result)
+      (-> result
+          (.then (fn [result]
+                   (-> e-lock .-style .-display (set! "none")))))
+      (-> e-lock .-style .-display (set! "none")))))
 
 (defn present* [e-wrapper e-lock presentation]
   (-> e-wrapper .-innerHTML (set! nil))
@@ -110,7 +119,7 @@
                            {:rows [{:cells [{:text "error"}]}
                                    {:cells [{:text (str error)}]}]}))))
 
-    (let [e-presentation (>presentation presentation)]
+    (let [e-presentation (>presentation presentation #(exec % e-lock))]
       (-> e-wrapper (.appendChild e-presentation))
       (-> e-lock .-style .-display (set! "none")))))
 

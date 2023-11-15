@@ -37,7 +37,13 @@
          (js/Promise. (fn [resolve reject]
                         (js/setTimeout
                          #(resolve
-                           {:rows [{:cells [{:text "Promise resolved!"}]}]})
+                           {:rows [{:cells [{:text "Promise resolved!"}]}
+                                   {:cells [{:text "Again!"
+                                             :action (fn []
+                                                       (js/Promise.
+                                                        (fn [resolve]
+                                                          (js/setTimeout (fn [] (resolve nil))
+                                                                         1000))))}]}]})
                          3000))))
 
 (example "contact entity"
