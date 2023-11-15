@@ -103,4 +103,5 @@
         #_(when-not e-parent
             (throw (js/Error. (str "Element '" element-id "' does not exist."))))
         e-presentation (>presentation presentation)]
+    (-> e-parent .-innerHTML (set! nil))
     (-> e-parent (.appendChild e-presentation))))
