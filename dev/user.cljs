@@ -33,6 +33,13 @@
                           {:text "abc"}]}
                  {:cells [{:text "This is the End"}]}]})
 
+(example "from promise"
+         (js/Promise. (fn [resolve reject]
+                        (js/setTimeout
+                         #(resolve
+                           {:rows [{:cells [{:text "Promise resolved!"}]}]})
+                         3000))))
+
 (example "contact entity"
          {:rows [{:cells [{:text "Witoslaw Koczewski"}]}
                  {:indent 1

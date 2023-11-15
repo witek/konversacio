@@ -99,9 +99,19 @@
           (>row row)))))
 
 (defn ^:export present [element-id presentation]
-  (let [e-parent (js/document.getElementById element-id)
-        #_(when-not e-parent
-            (throw (js/Error. (str "Element '" element-id "' does not exist."))))
-        e-presentation (>presentation presentation)]
-    (-> e-parent .-innerHTML (set! nil))
-    (-> e-parent (.appendChild e-presentation))))
+  (if (instance? js/Promise presentation)
+    (do
+      (present element-id {:rows [{:cells [{:text "loading..."}]}]})
+      (-> presentation
+          (.then (fn [presentation]
+                   (present element-id presentation))
+                 (fn [error]
+                   (present element-id {:rows [{:cells [{:text "error"}]}
+                                               {:cells [{:text (str error)}]}]})
+                   ))))
+    (let [e-parent (js/document.getElementById element-id)
+          #_(when-not e-parent
+              (throw (js/Error. (str "Element '" element-id "' does not exist."))))
+          e-presentation (>presentation presentation)]
+      (-> e-parent .-innerHTML (set! nil))
+      (-> e-parent (.appendChild e-presentation)))))
