@@ -61,7 +61,7 @@
 (defn >cell [cell exec]
   (let [action (-> cell :action)]
     ($ :div {:class "cell"
-             :style {:padding 4
+             :style {:padding "2px 4px"
                      :background-color (if action
                                          "rgba(0,0,0,0.8)"
                                          "rgba(0,0,0,0.2)")
@@ -145,12 +145,20 @@
                                    :text-align :center}}
                      "loading..."))
 
-        e-container ($ :div {:style {:min-height "300px"
-                                     :position "relative"
+        e-container ($ :div {:style {:height "100%"
+                                     :min-height "300px"
                                      :background-color "#333"
-                                     :color "#ddd"}}
-                       e-wrapper
-                       e-lock)
+                                     :color "#ddd"
+                                     :position "relative"
+                                     :display "flex"
+                                     :place-items "center"}}
+                       ($ :div {:style {:max-width "720px"
+                                        :margin "0 auto"
+                                        }}
+                          e-wrapper
+                          )
+                       e-lock
+                       )
 
         _ (-> e-root (.appendChild e-container))]
     (present* e-wrapper e-lock

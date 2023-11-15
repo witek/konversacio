@@ -9,8 +9,13 @@
 (defn example [id presentation]
   (-> (js/document.getElementById "examples")
       (.appendChild ($ :div {}
-                       ($ :h2 {} id)
-                       ($ :div {:id id}))))
+                       ($ :div {:style {:text-align "center"
+                                        :font-weight "bold"
+                                        :padding "16px 0 8px 0"
+                                        }}
+                          id)
+                       ($ :div {:id id
+                                :style {:height "300px"}}))))
   (konversacio/present id presentation))
 
 ;;; examples
