@@ -87,9 +87,7 @@
 
 (defn >presentation [presentation]
   ($ :div {:class "presentation"
-           :style {:background-color "#333"
-                   :color "#ddd"
-                   :padding "8px"
+           :style {:padding "8px"
                    :font-family :monospace}}
 
      ($ :div {:style {:display :flex
@@ -98,20 +96,53 @@
         (for [row (-> presentation :rows)]
           (>row row)))))
 
-(defn ^:export present [element-id presentation]
+(defn present* [e-wrapper e-lock presentation]
+  (-> e-wrapper .-innerHTML (set! nil))
+
   (if (instance? js/Promise presentation)
-    (do
-      (present element-id {:rows [{:cells [{:text "loading..."}]}]})
-      (-> presentation
-          (.then (fn [presentation]
-                   (present element-id presentation))
-                 (fn [error]
-                   (present element-id {:rows [{:cells [{:text "error"}]}
-                                               {:cells [{:text (str error)}]}]})
-                   ))))
-    (let [e-parent (js/document.getElementById element-id)
-          #_(when-not e-parent
-              (throw (js/Error. (str "Element '" element-id "' does not exist."))))
-          e-presentation (>presentation presentation)]
-      (-> e-parent .-innerHTML (set! nil))
-      (-> e-parent (.appendChild e-presentation)))))
+
+    (-> presentation
+        (.then (fn [presentation]
+                 (present* e-wrapper e-lock
+                           presentation))
+               (fn [error]
+                 (present* e-wrapper e-lock
+                           {:rows [{:cells [{:text "error"}]}
+                                   {:cells [{:text (str error)}]}]}))))
+
+    (let [e-presentation (>presentation presentation)]
+      (-> e-wrapper (.appendChild e-presentation))
+      (-> e-lock .-style .-display (set! "none")))))
+
+(defn ^:export present [element-id presentation]
+  (let [e-root (js/document.getElementById element-id)
+        _ (when-not e-root
+            (js/throw (js/Error. (str "Element '" element-id "' does not exist."))))
+        _ (-> e-root .-innerHTML (set! nil))
+
+        e-wrapper ($ :div {:class "wrapper"})
+        _ (-> e-root (.appendChild e-wrapper))
+
+        e-lock ($ :div {:class "lock"
+                        :style {:background-color "rgba(0,0,0,0.5)"
+                                :position "absolute"
+                                :top 0
+                                :width "100%"
+                                :height "100%"}}
+                  ($ :div {:style {:height "100%"
+                                   :display :flex
+                                   :place-items :center
+                                   :place-content :center
+                                   :text-align :center}}
+                     "loading..."))
+
+        e-container ($ :div {:style {:min-height "300px"
+                                     :position "relative"
+                                     :background-color "#333"
+                                     :color "#ddd"}}
+                       e-wrapper
+                       e-lock)
+
+        _ (-> e-root (.appendChild e-container))]
+    (present* e-wrapper e-lock
+              presentation)))

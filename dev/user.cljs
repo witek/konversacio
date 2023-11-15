@@ -7,7 +7,7 @@
 (def $ konversacio/$)
 
 (defn example [id presentation]
-  (-> js/document.body
+  (-> (js/document.getElementById "examples")
       (.appendChild ($ :div {}
                        ($ :h2 {} id)
                        ($ :div {:id id}))))
