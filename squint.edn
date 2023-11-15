@@ -1,3 +1,2 @@
 {:paths ["src" "dev"]
- :output-dir "dev"
- }
+ :output-dir "target/public"}
