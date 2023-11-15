@@ -1,0 +1,5 @@
+{:deps {org.babashka/http-server {:mvn/version "0.1.11"}}
+ :tasks
+ {dev {:requires ([babashka.http-server :as server])
+       :task (server/exec {:port 50010
+                            :dir "dev"})}}}

@@ -1,0 +1,6 @@
+{
+ "type": "module",
+ "dependencies": {
+                  "squint-cljs": "^0.4.42"
+                  }
+ }
