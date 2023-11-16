@@ -36,6 +36,8 @@
                           {:text "Button 1" :action #(js/alert "clicked!")}
                           {:text "Button 2" :action #(js/alert "clicked!")}
                           {:text "abc"}]}
+                 {:cells [{:text "Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum."
+                           :embedded true}]}
                  {:cells [{:text "This is the End"}]}]})
 
 (example "from promise"
@@ -50,6 +52,14 @@
                                                           (js/setTimeout (fn [] (resolve nil))
                                                                          1000))))}]}]})
                          3000))))
+
+(example "input text"
+         {:rows [{:cells [{:text "What is your E-Mail?"
+                           :embedded true}]}
+                 {:cells [{:input {:type :email
+                                   :name "email"}}]}]
+          :action (fn [data]
+                    (js/alert (js/JSON.stringify data)))})
 
 (example "contact entity"
          {:rows [{:cells [{:text "Witoslaw Koczewski"}]}

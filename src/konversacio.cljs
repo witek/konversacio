@@ -58,17 +58,28 @@
 
 (def px--cell-spacing 2)
 
+(defn >cell-content--input [input]
+  ($ :input
+     (assoc input
+            :style {})))
+
 (defn >cell [cell exec]
-  (let [action (-> cell :action)]
-    ($ :div {:class "cell"
-             :style {:padding "2px 4px"
-                     :background-color (if action
-                                         "rgba(0,0,0,0.8)"
-                                         "rgba(0,0,0,0.2)")
-                     ;; :border "1px solid #ddd"
-                     :cursor (when action :pointer)}
-             :on-click (when action #(exec action))}
-       (-> cell :text))))
+  (let [input (-> cell :input)
+        action (-> cell :action)
+        on-click (when (and action
+                            (nil? input))
+                   #(exec action))]
+    ($ :div {:class (str "cell "
+                         (cond
+                           input "cell--input "
+                           on-click "cell--action "
+                           (-> cell :embedded) "cell--embedded "
+                           :else "cell--data "))
+             :style {:cursor (when on-click :pointer)}
+             :on-click on-click}
+       (cond
+         input (>cell-content--input input)
+         :else (-> cell :text)))))
 
 (defn >row [row exec]
   ($ :div {:class "row"
@@ -88,7 +99,8 @@
 (defn >presentation [presentation exec]
   ($ :div {:class "presentation"
            :style {:padding "8px"
-                   :font-family :monospace}}
+                   ;; :font-family :monospace
+                   }}
 
      ($ :div {:style {:display :flex
                       :flex-direction :column
@@ -96,9 +108,14 @@
         (for [row (-> presentation :rows)]
           (>row row exec)))))
 
-(defn exec [f e-lock]
+(defn exec [f e-lock e-form]
   (-> e-lock .-style .-display (set! "block"))
-  (let [result (f)]
+  (let [form-data (->> e-form
+                       js/FormData.
+                       .entries
+                       (into {}))
+        _ (js/console.log "exec" {:form-data form-data})
+        result (f form-data)]
     (if (instance? js/Promise result)
       (-> result
           (.then (fn [result]
@@ -119,8 +136,16 @@
                            {:rows [{:cells [{:text "error"}]}
                                    {:cells [{:text (str error)}]}]}))))
 
-    (let [e-presentation (>presentation presentation #(exec % e-lock))]
-      (-> e-wrapper (.appendChild e-presentation))
+    (let [e-form ($ :form {:onsubmit "return false;"}
+                    )
+          e-presentation (>presentation presentation #(exec % e-lock e-form))
+          _ (-> e-form (.appendChild e-presentation))
+          _ (-> e-form (.addEventListener "submit" (fn [event]
+                                                     (-> event .preventDefault)
+                                                     (when-let [f (-> presentation :action)]
+                                                       (exec f e-lock e-form))
+                                                     false)))]
+      (-> e-wrapper (.appendChild e-form))
       (-> e-lock .-style .-display (set! "none")))))
 
 (defn ^:export present [element-id presentation]
@@ -143,12 +168,10 @@
                                    :place-items :center
                                    :place-content :center
                                    :text-align :center}}
-                     "loading..."))
+                     ($ :div {:aria-busy true} "loading...")))
 
         e-container ($ :div {:style {:height "100%"
                                      :min-height "300px"
-                                     :background-color "#333"
-                                     :color "#ddd"
                                      :position "relative"
                                      :display "flex"
                                      :place-items "center"}}

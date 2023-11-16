@@ -1,0 +1,21 @@
+form {
+    margin-block-end: unset;
+}
+
+.cell {
+
+}
+
+.cell--action, .cell--data {
+    background-color: var(--code-background-color);
+    padding: 2px 8px;
+    border-radius: var(--border-radius)
+}
+
+.cell--embedded {
+    padding: 2px 8px;
+}
+
+.cell--action {
+    color: var(--code-property-color);
+}
