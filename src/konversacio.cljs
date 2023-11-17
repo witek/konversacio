@@ -1,5 +1,5 @@
 (ns konversacio
-  (:require-macros [macros :refer [DEBUG]])
+  (:require-macros [macros :refer [DEBUG ERROR try>]])
   (:require
    [clojure.string :as str]))
 
@@ -76,7 +76,8 @@
                            on-click "cell--action "
                            (-> cell :embedded) "cell--embedded "
                            :else "cell--data "))
-             :style {:cursor (when on-click :pointer)}
+             :style {:cursor (when on-click :pointer)
+                     :color (-> cell :color)}
              :on-click on-click}
        (cond
          input (>cell-content--input input)
@@ -111,23 +112,76 @@
 
 (declare present)
 
-(defn action--load [[_ url opts]]
-  (fn []
-    (let [response (js/fetch url opts)])))
+(defn present-in-popup [element-id presentation]
+  (present element-id presentation))
 
-(defn ^:async action->f [action]
+;;; presentation helpers
+
+(defn p--error [error context]
+  (DEBUG "p--error" {:error error
+                     :context context})
+  ;; TODO destructure error
+  {:rows [{:cells [{:text "ERROR"
+                    :color "red"}]}
+          {:cells [{:text (str error)}]}
+          (when context
+            {:cells [{:text (try
+                              (js/JSON.stringify context)
+                              (catch :default _ex
+                                (str context)))}]})]})
+
+(defn p--message [text]
+  {:rows [{:cells [{:text (str text)}]}]})
+
+(defn coerce-presentation [thing]
   (cond
 
-    true (fn []{:rows [{:cells [{:text "dummy"}]}]})
+    (nil? thing) (p--message "presentation is nil")
+
+    (and (map? thing)
+         (-> thing :rows))
+    thing
+
+    :else
+    (p--error (str "Unsupported presentation '" thing "' of type '" (js/typeof thing) "'.")
+              {:presentation thing})))
+
+;;; action processing
+
+(defn present-error-in-popup [element-id error context]
+  (present-in-popup element-id (p--error error context)))
+
+(defn ^:async action--load [[_ url opts]]
+  (fn []
+    (DEBUG "action--load" {:url url :opts opts})
+    (-> (js/fetch url opts)
+        (.then (fn [response]
+                 (DEBUG "action--load--response" {:response response})
+                 (if-not (-> response :ok)
+                   (throw (js/Error. (str "Loading '" url "' failed. "
+                                          (-> response .-status) " " (-> response .-statusText))))
+                   response))))))
+
+(defn ^:async action->f [action]
+  ;; (throw (js/Error. "boom!"))
+  (cond
+
+    ;; true #(p--error "dummy here")
 
     (fn? action) action
 
     (vector? action)
     (cond
       (= :load (first action)) (action--load action)
-      :else (js/throw (js/Error. (str "Unsupported action '" action "'."))))
+      :else (throw (js/Error. (str "Unsupported action '" action "'."))))
 
-    :else (js/throw (js/Error. (str "Unsupported action '" action "' of type '" (type action) "'.")))))
+    :else (throw (js/Error. (str "Unsupported action '" action "' of type '" (js/typeof action) "'.")))))
+
+(defn ^:async handle-action-result [result root-element-id e-lock]
+  (DEBUG "handle-action-result" {:result result})
+  (-> e-lock .-style .-display (set! "none"))
+        (when result
+          (present root-element-id result)))
 
 (defn ^:async exec [action root-element-id e-lock e-form]
   (DEBUG "exec" {:action action})
@@ -136,20 +190,20 @@
                        js/FormData.
                        .entries
                        (into {}))
-        _ (js/console.log "exec" {:form-data form-data})
-        f (js/await (action->f action))
-        result (f form-data)]
-    (DEBUG "exec--action-executed" {:result result
-                                    :action action})
-    (if (instance? js/Promise result)
-      (-> result
-          (.then (fn [result]
-                   (-> e-lock .-style .-display (set! "none"))
-                   (when result
-                     (present root-element-id result)))))
-      (do (-> e-lock .-style .-display (set! "none"))
-          (when result
-            (present root-element-id result))))))
+        _ (js/console.log "exec" {:form-data form-data})]
+    (try> (action->f action)
+          #(present-error-in-popup root-element-id % {:action action})
+          (fn [f]
+            (DEBUG "exec--function-resolved" {:f f})
+            (try> (f form-data)
+                  #(present-error-in-popup root-element-id % {:action action})
+                  (fn [result]
+                    (DEBUG "exec--action-executed" {:result result
+                                                    :action action})
+                    (handle-action-result result root-element-id e-lock))
+                  )))))
+
+;;; presentation handling
 
 (defn present* [root-element-id e-wrapper e-lock presentation]
   (-> e-wrapper .-innerHTML (set! nil))
@@ -161,12 +215,15 @@
                  (present* root-element-id e-wrapper e-lock
                            presentation))
                (fn [error]
+                 (DEBUG "present*--resolving-presentation-promise-failed"
+                        {:error error
+                         :presentation presentation})
                  (present* root-element-id e-wrapper e-lock
-                           {:rows [{:cells [{:text "error"}]}
-                                   {:cells [{:text (str error)}]}]}))))
+                           (p--error error {:presentation presentation})))))
 
-    (let [e-form ($ :form {:onsubmit "return false;"}
-                    )
+    (let [_ (DEBUG "present*" {:presentation presentation})
+          presentation (coerce-presentation presentation)
+          e-form ($ :form {:onsubmit "return false;"})
           exec-f #(exec % root-element-id e-lock e-form)
           e-presentation (>presentation presentation exec-f)
           _ (-> e-form (.appendChild e-presentation))
