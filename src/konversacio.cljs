@@ -1,4 +1,5 @@
 (ns konversacio
+  (:require-macros [macros :refer [DEBUG]])
   (:require
    [clojure.string :as str]))
 
@@ -108,47 +109,79 @@
         (for [row (-> presentation :rows)]
           (>row row exec)))))
 
-(defn exec [f e-lock e-form]
+(declare present)
+
+(defn action--load [[_ url opts]]
+  (fn []
+    (let [response (js/fetch url opts)])))
+
+(defn ^:async action->f [action]
+  (cond
+
+    true (fn []{:rows [{:cells [{:text "dummy"}]}]})
+
+    (fn? action) action
+
+    (vector? action)
+    (cond
+      (= :load (first action)) (action--load action)
+      :else (js/throw (js/Error. (str "Unsupported action '" action "'."))))
+
+    :else (js/throw (js/Error. (str "Unsupported action '" action "' of type '" (type action) "'.")))))
+
+(defn ^:async exec [action root-element-id e-lock e-form]
+  (DEBUG "exec" {:action action})
   (-> e-lock .-style .-display (set! "block"))
   (let [form-data (->> e-form
                        js/FormData.
                        .entries
                        (into {}))
         _ (js/console.log "exec" {:form-data form-data})
+        f (js/await (action->f action))
         result (f form-data)]
+    (DEBUG "exec--action-executed" {:result result
+                                    :action action})
     (if (instance? js/Promise result)
       (-> result
           (.then (fn [result]
-                   (-> e-lock .-style .-display (set! "none")))))
-      (-> e-lock .-style .-display (set! "none")))))
+                   (-> e-lock .-style .-display (set! "none"))
+                   (when result
+                     (present root-element-id result)))))
+      (do (-> e-lock .-style .-display (set! "none"))
+          (when result
+            (present root-element-id result))))))
 
-(defn present* [e-wrapper e-lock presentation]
+(defn present* [root-element-id e-wrapper e-lock presentation]
   (-> e-wrapper .-innerHTML (set! nil))
 
   (if (instance? js/Promise presentation)
 
     (-> presentation
         (.then (fn [presentation]
-                 (present* e-wrapper e-lock
+                 (present* root-element-id e-wrapper e-lock
                            presentation))
                (fn [error]
-                 (present* e-wrapper e-lock
+                 (present* root-element-id e-wrapper e-lock
                            {:rows [{:cells [{:text "error"}]}
                                    {:cells [{:text (str error)}]}]}))))
 
     (let [e-form ($ :form {:onsubmit "return false;"}
                     )
-          e-presentation (>presentation presentation #(exec % e-lock e-form))
+          exec-f #(exec % root-element-id e-lock e-form)
+          e-presentation (>presentation presentation exec-f)
           _ (-> e-form (.appendChild e-presentation))
           _ (-> e-form (.addEventListener "submit" (fn [event]
                                                      (-> event .preventDefault)
                                                      (when-let [f (-> presentation :action)]
-                                                       (exec f e-lock e-form))
+                                                       (exec f root-element-id e-lock e-form))
                                                      false)))]
       (-> e-wrapper (.appendChild e-form))
       (-> e-lock .-style .-display (set! "none")))))
 
+
 (defn ^:export present [element-id presentation]
+  (DEBUG "present" {:element-id element-id
+                    :presentation presentation})
   (let [e-root (js/document.getElementById element-id)
         _ (when-not e-root
             (js/throw (js/Error. (str "Element '" element-id "' does not exist."))))
@@ -184,5 +217,5 @@
                        )
 
         _ (-> e-root (.appendChild e-container))]
-    (present* e-wrapper e-lock
+    (present* element-id e-wrapper e-lock
               presentation)))
